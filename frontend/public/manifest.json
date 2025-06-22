@@ -1,0 +1,33 @@
+{
+  "short_name": "株式分析",
+  "name": "株式分析ヘルパー",
+  "description": "個人投資家向けの包括的な株式分析ツール",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "categories": ["finance", "business", "utilities"],
+  "lang": "ja",
+  "scope": "/",
+  "prefer_related_applications": false
+}

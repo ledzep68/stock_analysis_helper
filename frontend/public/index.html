@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1976d2" />
+    <meta name="description" content="株式投資分析支援システム - 投資初心者向けの包括的な株式選定支援ツール" />
+    
+    <!-- セキュリティメタタグ -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    
+    <!-- CSP（開発時は制限を緩和、本番では厳格化） -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline' fonts.googleapis.com;
+      font-src 'self' fonts.gstatic.com;
+      img-src 'self' data: https:;
+      connect-src 'self' http://localhost:5000 http://localhost:5001 http://localhost:5002 http://localhost:5003 https://query1.finance.yahoo.com;
+      object-src 'none';
+      media-src 'none';
+      frame-src 'none';
+    " />
+    
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Google Fonts（セキュア設定） -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <title>StockAnalysis Helper - 株式投資分析支援システム</title>
+  </head>
+  <body>
+    <noscript>
+      このアプリケーションを実行するにはJavaScriptを有効にしてください。
+    </noscript>
+    <div id="root"></div>
+    
+    <!-- セキュリティ強化用の非表示要素 -->
+    <div id="security-honeypot" style="display: none;" aria-hidden="true">
+      <!-- ボット検出用のハニーポット -->
+    </div>
+    
+    <!-- 法的免責事項 -->
+    <div style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 8px; font-size: 12px; text-align: center; z-index: 9999; display: none;" id="legal-disclaimer">
+      免責事項: この情報は投資の参考資料であり、投資助言ではありません。最終的な投資判断はご自身の責任で行ってください。
+      <button onclick="this.parentElement.style.display='none'" style="margin-left: 10px; background: white; color: black; border: none; padding: 4px 8px; cursor: pointer;">閉じる</button>
+    </div>
+    
+    <script>
+      // 免責事項の表示（初回アクセス時のみ）
+      if (!localStorage.getItem('disclaimer-acknowledged')) {
+        document.getElementById('legal-disclaimer').style.display = 'block';
+        localStorage.setItem('disclaimer-acknowledged', 'true');
+      }
+      
+      // セキュリティ監視
+      (function() {
+        let evalCalled = false;
+        const originalEval = window.eval;
+        window.eval = function() {
+          evalCalled = true;
+          console.warn('Eval call detected - potential security risk');
+          throw new Error('Eval is disabled for security reasons');
+        };
+        
+        // ページ離脱時のセキュリティチェック
+        window.addEventListener('beforeunload', function() {
+          if (evalCalled) {
+            console.warn('Security event detected during session');
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
