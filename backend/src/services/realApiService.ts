@@ -45,8 +45,11 @@ class RealApiService {
     try {
       this.logger.info(`Yahoo Finance API call starting`, { symbol });
       
+      // 日本株の場合、.Tサフィックスを追加
+      const yahooSymbol = this.formatSymbolForYahoo(symbol);
+      
       const response = await axios.get(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`,
+        `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`,
         {
           timeout: testEnvironment.getApiConfig('yahooFinance').timeout,
           headers: {
@@ -464,6 +467,19 @@ class RealApiService {
 
     this.logger.info('API health check completed', { results });
     return results;
+  }
+
+  /**
+   * Yahoo Finance用にシンボルをフォーマット
+   */
+  private formatSymbolForYahoo(symbol: string): string {
+    // 日本株の場合（4桁数字）、.Tサフィックスを追加
+    if (/^\d{4}$/.test(symbol)) {
+      return `${symbol}.T`;
+    }
+    
+    // その他のシンボルはそのまま返す
+    return symbol;
   }
 }
 

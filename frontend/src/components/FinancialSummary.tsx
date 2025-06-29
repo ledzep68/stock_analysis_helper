@@ -14,6 +14,8 @@ import {
 import { TrendingUp, TrendingDown, Favorite, FavoriteBorder, ShowChart, NotificationAdd } from '@mui/icons-material';
 import { Company, FinancialData } from '../types';
 import { getCompanyData, api } from '../services/api';
+import { RealTimePriceDisplay } from './RealTimePriceDisplay';
+import { PriceUpdate } from '../hooks/useWebSocket';
 
 interface FinancialSummaryProps {
   company: Company;
@@ -26,6 +28,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ company, onPageChan
   const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [realTimePrice, setRealTimePrice] = useState<PriceUpdate | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -124,6 +127,12 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ company, onPageChan
     }
   };
 
+  const handleRealTimePriceUpdate = (symbol: string, update: PriceUpdate) => {
+    if (symbol === company.symbol) {
+      setRealTimePrice(update);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -159,17 +168,27 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ company, onPageChan
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h4" component="div" sx={{ mr: 1 }}>
-                  {formatCurrency(financialData.price)}
+                  {realTimePrice ? formatCurrency(realTimePrice.price) : formatCurrency(financialData.price)}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  {isPositiveChange ? <TrendingUp color="success" /> : <TrendingDown color="error" />}
+                  {(realTimePrice ? realTimePrice.change >= 0 : isPositiveChange) ? 
+                    <TrendingUp color="success" /> : <TrendingDown color="error" />}
                   <Typography
                     variant="body1"
-                    color={isPositiveChange ? 'success.main' : 'error.main'}
+                    color={(realTimePrice ? realTimePrice.change >= 0 : isPositiveChange) ? 'success.main' : 'error.main'}
                     sx={{ ml: 0.5 }}
                   >
-                    {isPositiveChange ? '+' : ''}{financialData.change.toFixed(2)} 
-                    ({isPositiveChange ? '+' : ''}{financialData.changePercent.toFixed(2)}%)
+                    {realTimePrice ? (
+                      <>
+                        {realTimePrice.change >= 0 ? '+' : ''}{realTimePrice.change.toFixed(2)} 
+                        ({realTimePrice.change >= 0 ? '+' : ''}{realTimePrice.changePercent.toFixed(2)}%)
+                      </>
+                    ) : (
+                      <>
+                        {isPositiveChange ? '+' : ''}{financialData.change.toFixed(2)} 
+                        ({isPositiveChange ? '+' : ''}{financialData.changePercent.toFixed(2)}%)
+                      </>
+                    )}
                   </Typography>
                 </Box>
               </Box>
@@ -311,6 +330,11 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ company, onPageChan
               アラート設定
             </Button>
           </Box>
+
+          <RealTimePriceDisplay 
+            symbols={[company.symbol]}
+            onPriceUpdate={handleRealTimePriceUpdate}
+          />
 
           <Alert severity="info" sx={{ mt: 3 }}>
             <Typography variant="body2">

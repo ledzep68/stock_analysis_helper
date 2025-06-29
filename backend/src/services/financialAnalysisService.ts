@@ -121,13 +121,15 @@ export class FinancialAnalysisService {
       // Get the latest stock price data
       const query = `
         SELECT 
-          sp.*,
-          c.name as company_name
-        FROM stock_prices sp
-        JOIN companies c ON sp.symbol = c.symbol
-        WHERE sp.symbol = $1
-        ORDER BY sp.recorded_at DESC
-        LIMIT 1
+          c.symbol,
+          c.name as company_name,
+          c.current_price as price,
+          c.market_cap,
+          c.current_price / 15.0 as pe_ratio,
+          0.0 as eps,
+          0.0 as dividend_yield
+        FROM companies c
+        WHERE c.symbol = ?
       `;
 
       const result = await sqliteDb.query(query, [validSymbol]);

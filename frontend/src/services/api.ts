@@ -1,8 +1,11 @@
 import axios from 'axios';
 import { Company, FinancialData, ApiResponse } from '../types';
+import { isTokenValid, debugToken } from '../utils/tokenUtils';
 
-// 一時的にハードコード - 絶対にポート5001を使用
-const API_BASE_URL = 'http://localhost:5003/api';
+// プロキシが動作しない場合の直接アクセス
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:5555/api' 
+  : '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -12,17 +15,25 @@ const apiClient = axios.create({
 // Add token to all requests if available
 apiClient.interceptors.request.use((config) => {
   console.log(`🚀 Making API request to: ${config.baseURL}${config.url}`);
-  console.log(`📋 Request config:`, {
-    method: config.method,
-    url: config.url,
-    params: config.params,
-    headers: config.headers
-  });
+  
+  // 開発環境での一時的な認証スキップ
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 Development mode - bypassing auth token requirement');
+    return config;
+  }
   
   const token = localStorage.getItem('token');
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-    console.log(`🔑 Added auth token to request`);
+    if (isTokenValid(token)) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log(`🔑 Added valid auth token to request`);
+    } else {
+      console.log(`🚫 Token is invalid/expired, removing from storage`);
+      localStorage.removeItem('token');
+      // Redirect to login instead of continuing with invalid token
+      window.location.reload();
+      return Promise.reject(new Error('Token expired'));
+    }
   } else {
     console.log(`⚠️ No auth token found`);
   }
@@ -33,9 +44,21 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error('🚨 API Response Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      url: error.config?.url,
+      method: error.config?.method
+    });
+
     if (error.response?.status === 401) {
+      console.log('🔒 401 Unauthorized - removing token and reloading');
       localStorage.removeItem('token');
-      // Optionally redirect to login
+      window.location.reload();
+    } else if (error.response?.status === 403) {
+      console.log('🚫 403 Forbidden - token may be expired or invalid');
+      localStorage.removeItem('token');
       window.location.reload();
     }
     return Promise.reject(error);
@@ -51,7 +74,13 @@ export const login = async (email: string, password: string): Promise<string> =>
     });
     
     if (response.data.success && response.data.data?.token) {
-      return response.data.data.token;
+      const token = response.data.data.token;
+      
+      // Debug token information
+      console.log('🎫 Login successful, token received');
+      debugToken(token);
+      
+      return token;
     }
     
     throw new Error(response.data.error || 'Login failed');
@@ -66,7 +95,17 @@ export const logout = (): void => {
 };
 
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem('token');
+  const token = localStorage.getItem('token');
+  if (!token) {
+    return false;
+  }
+  
+  const valid = isTokenValid(token);
+  if (!valid) {
+    localStorage.removeItem('token');
+  }
+  
+  return valid;
 };
 
 export const searchCompanies = async (query: string): Promise<Company[]> => {
@@ -228,7 +267,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export const api = {
+const api = {
   get: (url: string, config?: any) => {
     return apiClient.get(url, config);
   },
@@ -242,3 +281,6 @@ export const api = {
     return apiClient.delete(url, config);
   }
 };
+
+export { api };
+export default api;

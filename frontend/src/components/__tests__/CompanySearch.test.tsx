@@ -1,189 +1,152 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom';
 import CompanySearch from '../CompanySearch';
+import { searchCompanies } from '../../services/api';
 
 // Mock the API
-jest.mock('../../services/api', () => ({
-  searchCompanies: jest.fn()
-}));
-
-import { searchCompanies } from '../../services/api';
+jest.mock('../../services/api');
 
 const mockSearchCompanies = searchCompanies as jest.MockedFunction<typeof searchCompanies>;
 
 const mockCompanies = [
   {
     symbol: '7203',
-    name: 'トヨタ自動車株式会社',
+    name: 'トヨタ自動車',
     market: 'TSE',
-    sector: '輸送用機器',
-    description: '自動車メーカー'
+    sector: '輸送用機器'
   },
   {
-    symbol: '9984',
-    name: 'ソフトバンクグループ株式会社',
+    symbol: '7201',
+    name: '日産自動車',
     market: 'TSE',
-    sector: '情報・通信業',
-    description: '投資持株会社'
+    sector: '輸送用機器'
   }
 ];
 
-describe('CompanySearch Component', () => {
+describe('CompanySearch', () => {
   const mockOnCompanySelect = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('renders search form', () => {
+  it('should render search input', () => {
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    expect(screen.getByText('企業検索')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('企業名または銘柄コードを入力してください')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '検索' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('企業名または銘柄コードで検索')).toBeInTheDocument();
   });
 
-  it('performs search when user types and clicks search button', async () => {
-    const user = userEvent.setup();
+  it('should perform search when typing', async () => {
     mockSearchCompanies.mockResolvedValue(mockCompanies);
     
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'トヨタ');
-    await user.click(searchButton);
-    
-    expect(mockSearchCompanies).toHaveBeenCalledWith('トヨタ');
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
+
+    await waitFor(() => {
+      expect(mockSearchCompanies).toHaveBeenCalledWith('トヨタ');
+    });
+
+    expect(screen.getByText('トヨタ自動車')).toBeInTheDocument();
+    expect(screen.getByText('7203')).toBeInTheDocument();
   });
 
-  it('displays search results', async () => {
-    const user = userEvent.setup();
+  it('should handle company selection', async () => {
     mockSearchCompanies.mockResolvedValue(mockCompanies);
     
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'トヨタ');
-    await user.click(searchButton);
-    
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
+
     await waitFor(() => {
-      expect(screen.getByText('トヨタ自動車株式会社')).toBeInTheDocument();
-      expect(screen.getByText('7203')).toBeInTheDocument();
-      expect(screen.getByText('輸送用機器')).toBeInTheDocument();
+      expect(screen.getByText('トヨタ自動車')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByText('トヨタ自動車'));
+
+    expect(mockOnCompanySelect).toHaveBeenCalledWith(mockCompanies[0]);
   });
 
-  it('calls onCompanySelect when company card is clicked', async () => {
-    const user = userEvent.setup();
-    mockSearchCompanies.mockResolvedValue(mockCompanies);
+  it('should show loading state during search', async () => {
+    mockSearchCompanies.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(mockCompanies), 100)));
     
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'トヨタ');
-    await user.click(searchButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText('トヨタ自動車株式会社')).toBeInTheDocument();
-    });
-    
-    const companyCard = screen.getByText('トヨタ自動車株式会社').closest('.MuiCard-root');
-    expect(companyCard).toBeInTheDocument();
-    
-    if (companyCard) {
-      await user.click(companyCard);
-      expect(mockOnCompanySelect).toHaveBeenCalledWith(mockCompanies[0]);
-    }
-  });
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
 
-  it('displays loading state during search', async () => {
-    const user = userEvent.setup();
-    let resolveSearch: (value: any[]) => void;
-    const searchPromise = new Promise<any[]>((resolve) => {
-      resolveSearch = resolve;
-    });
-    mockSearchCompanies.mockReturnValue(searchPromise);
-    
-    render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
-    
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'トヨタ');
-    await user.click(searchButton);
-    
-    expect(screen.getByTestId('search-loading')).toBeInTheDocument();
-    
-    resolveSearch!(mockCompanies);
-    
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
     await waitFor(() => {
-      expect(screen.queryByTestId('search-loading')).not.toBeInTheDocument();
+      expect(screen.getByText('トヨタ自動車')).toBeInTheDocument();
     });
   });
 
-  it('displays error message on search failure', async () => {
-    const user = userEvent.setup();
+  it('should handle search errors', async () => {
     mockSearchCompanies.mockRejectedValue(new Error('Search failed'));
     
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'トヨタ');
-    await user.click(searchButton);
-    
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
+
     await waitFor(() => {
-      expect(screen.getByText('検索に失敗しました。もう一度お試しください。')).toBeInTheDocument();
+      expect(screen.getByText('検索中にエラーが発生しました')).toBeInTheDocument();
     });
   });
 
-  it('displays no results message when search returns empty array', async () => {
-    const user = userEvent.setup();
-    mockSearchCompanies.mockResolvedValue([]);
-    
-    render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
-    
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    
-    await user.type(searchInput, 'nonexistent');
-    await user.click(searchButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText('検索結果が見つかりませんでした。')).toBeInTheDocument();
-    });
-  });
-
-  it('prevents search with empty query', async () => {
-    const user = userEvent.setup();
-    
-    render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
-    
-    const searchButton = screen.getByRole('button', { name: '検索' });
-    await user.click(searchButton);
-    
-    expect(mockSearchCompanies).not.toHaveBeenCalled();
-  });
-
-  it('performs search on Enter key press', async () => {
-    const user = userEvent.setup();
+  it('should clear results when search is cleared', async () => {
     mockSearchCompanies.mockResolvedValue(mockCompanies);
     
     render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
     
-    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードを入力してください');
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
     
-    await user.type(searchInput, 'トヨタ');
-    await user.keyboard('{Enter}');
+    // Search
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
+    await waitFor(() => {
+      expect(screen.getByText('トヨタ自動車')).toBeInTheDocument();
+    });
+
+    // Clear search
+    fireEvent.change(searchInput, { target: { value: '' } });
     
-    expect(mockSearchCompanies).toHaveBeenCalledWith('トヨタ');
+    expect(screen.queryByText('トヨタ自動車')).not.toBeInTheDocument();
+  });
+
+  it('should show no results message', async () => {
+    mockSearchCompanies.mockResolvedValue([]);
+    
+    render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
+    
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('検索結果が見つかりませんでした')).toBeInTheDocument();
+    });
+  });
+
+  it('should debounce search input', async () => {
+    mockSearchCompanies.mockResolvedValue(mockCompanies);
+    
+    render(<CompanySearch onCompanySelect={mockOnCompanySelect} />);
+    
+    const searchInput = screen.getByPlaceholderText('企業名または銘柄コードで検索');
+    
+    // Type quickly
+    fireEvent.change(searchInput, { target: { value: 't' } });
+    fireEvent.change(searchInput, { target: { value: 'to' } });
+    fireEvent.change(searchInput, { target: { value: 'toy' } });
+    fireEvent.change(searchInput, { target: { value: 'トヨタ' } });
+
+    // Should only call search once after debounce
+    await waitFor(() => {
+      expect(mockSearchCompanies).toHaveBeenCalledTimes(1);
+      expect(mockSearchCompanies).toHaveBeenCalledWith('トヨタ');
+    });
   });
 });

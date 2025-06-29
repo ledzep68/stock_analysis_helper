@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Typography, Box, useMediaQuery } from '@mui/material';
 import { Search as SearchIcon, Assessment as AssessmentIcon, Notifications as NotificationsIcon, PictureAsPdf as ReportIcon } from '@mui/icons-material';
 import CompanySearch from './components/CompanySearch';
@@ -7,49 +7,62 @@ import FinancialSummary from './components/FinancialSummary';
 import { SecurityProvider } from './components/SecurityProvider';
 import { MobileLayout } from './components/MobileLayout';
 import { TechnicalAnalysis } from './components/TechnicalAnalysis';
-import { PriceAlerts } from './components/PriceAlerts';
+import PriceAlerts from './components/PriceAlerts';
 import { ReportGenerator } from './components/ReportGenerator';
 import { Portfolio } from './components/Portfolio';
+import PortfolioManagement from './components/PortfolioManagement';
+import ESGDashboard from './components/ESGDashboard';
 import { UserProfile } from './components/UserProfile';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { Login } from './components/Login';
+import { DebugTokenInfo } from './components/DebugTokenInfo';
 import { usePWA } from './hooks/usePWA';
 import { isAuthenticated, logout } from './services/api';
 import { Company } from './types';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-  typography: {
-    h4: {
-      fontWeight: 600,
-    },
-    h5: {
-      fontWeight: 600,
-    },
-  },
-});
+import { lightTheme, darkTheme } from './theme/mobileTheme';
 
 function App() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [currentPage, setCurrentPage] = useState('home');
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
   
   const { isInstallable, registerServiceWorker } = usePWA();
+  
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
 
   useEffect(() => {
     // Check authentication status
     setAuthenticated(isAuthenticated());
     
-    // Register service worker
-    registerServiceWorker();
+    // Unregister all service workers in development
+    if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(registration => {
+          registration.unregister();
+          console.log('Unregistered service worker:', registration);
+        });
+      });
+      
+      // Clear all caches
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            caches.delete(name);
+            console.log('Deleted cache:', name);
+          });
+        });
+      }
+    } else {
+      // Register service worker only in production
+      registerServiceWorker();
+    }
 
     // Show install prompt after 30 seconds if installable
     const timer = setTimeout(() => {
@@ -87,7 +100,7 @@ function App() {
   if (!authenticated) {
     return (
       <SecurityProvider>
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
           <CssBaseline />
           <Login onLogin={handleLogin} />
         </ThemeProvider>
@@ -127,7 +140,7 @@ function App() {
           </Box>
         );
       case 'portfolio':
-        return <Portfolio />;
+        return <PortfolioManagement />;
       case 'profile':
         return <UserProfile />;
       case 'favorites':
@@ -174,6 +187,14 @@ function App() {
         return <PriceAlerts presetSymbol={selectedCompany?.symbol} />;
       case 'reports':
         return <ReportGenerator />;
+      case 'esg':
+        return selectedCompany ? (
+          <ESGDashboard symbol={selectedCompany.symbol} />
+        ) : (
+          <Box textAlign="center" py={4}>
+            <Typography>企業を選択してESG評価を表示</Typography>
+          </Box>
+        );
       case 'home':
       default:
         return selectedCompany ? (
@@ -275,12 +296,14 @@ function App() {
   // 常にモバイルレイアウトを使用（デスクトップでも）
   return (
     <SecurityProvider>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
         <CssBaseline />
         <MobileLayout 
           currentPage={currentPage} 
           onPageChange={setCurrentPage}
           onLogout={handleLogout}
+          darkMode={darkMode}
+          onThemeToggle={() => setDarkMode(!darkMode)}
         >
           {renderContent()}
         </MobileLayout>
@@ -288,6 +311,7 @@ function App() {
           open={showInstallPrompt} 
           onClose={() => setShowInstallPrompt(false)} 
         />
+        <DebugTokenInfo />
       </ThemeProvider>
     </SecurityProvider>
   );

@@ -97,6 +97,12 @@ export const usePWA = (): PWAState & PWAActions => {
       return;
     }
 
+    // Skip service worker in development to avoid caching issues
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Skipping Service Worker registration in development');
+      return;
+    }
+
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('Service Worker registered successfully:', registration);

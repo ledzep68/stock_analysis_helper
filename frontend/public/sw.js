@@ -4,8 +4,6 @@ const IMAGE_CACHE_NAME = 'stock-analysis-images-v1';
 
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
   '/favicon.ico',
   '/logo192.png',
@@ -25,7 +23,15 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Opened cache');
-        return cache.addAll(urlsToCache);
+        // Try to cache each URL individually to avoid failing on missing files
+        return Promise.all(
+          urlsToCache.map(url => {
+            return cache.add(url).catch(err => {
+              console.warn(`Failed to cache ${url}:`, err);
+              // Continue even if one file fails
+            });
+          })
+        );
       })
   );
 });
@@ -35,11 +41,30 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip all API calls completely
-  if (request.url.includes('localhost:5001') || 
-      request.url.includes('/api/') || 
-      request.method !== 'GET') {
-    return; // Let the browser handle it directly
+  // Skip non-GET requests
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  // Skip hot-reload files
+  if (url.pathname.includes('.hot-update.')) {
+    return;
+  }
+
+  // Skip chrome extension requests
+  if (url.protocol === 'chrome-extension:') {
+    return;
+  }
+
+  // Skip WebSocket requests
+  if (url.pathname.includes('/socket.io/') || url.pathname.includes('/sockjs-node/')) {
+    return;
+  }
+
+  // Skip cross-origin requests that are not whitelisted
+  if (!url.origin.includes(self.location.origin) && 
+      !url.origin.includes('localhost')) {
+    return;
   }
 
   // API requests - Network first, cache fallback
@@ -86,26 +111,29 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         return fetch(request).then((response) => {
-          if (response.ok && !request.url.startsWith('chrome-extension://')) {
+          if (response.ok) {
             const responseToCache = response.clone();
             caches.open(IMAGE_CACHE_NAME).then((cache) => {
               cache.put(request, responseToCache);
             });
           }
           return response;
+        }).catch(() => {
+          // Return a placeholder image or error response
+          return new Response('', { status: 404 });
         });
       })
     );
     return;
   }
 
-  // Default - Cache first, network fallback
+  // Default - Cache first, network fallback for static assets
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
         // Return cache and update in background
         fetch(request).then((response) => {
-          if (response.ok && !request.url.startsWith('chrome-extension://')) {
+          if (response.ok) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(request, responseToCache);
@@ -128,20 +156,23 @@ self.addEventListener('fetch', (event) => {
         });
 
         return response;
+      }).catch(() => {
+        // Return offline page if available
+        return caches.match('/offline.html');
       });
     })
   );
 });
 
-// Update Service Worker
+// Activate Service Worker and clean old caches
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME, API_CACHE_NAME, IMAGE_CACHE_NAME];
-
+  
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (!cacheWhitelist.includes(cacheName)) {
             return caches.delete(cacheName);
           }
         })
@@ -159,16 +190,39 @@ self.addEventListener('sync', (event) => {
 
 async function doBackgroundSync() {
   try {
+    // Get the token from IndexedDB or other storage
+    const token = await getStoredToken();
+    
+    if (!token) {
+      console.log('No auth token available for background sync');
+      return;
+    }
+
     // Sync favorite stocks data
-    const response = await fetch('/api/favorites');
+    const response = await fetch('/api/favorites', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
     if (response.ok) {
       const data = await response.json();
-      // Store updated data in IndexedDB or send notification
+      // Store updated data in cache
+      const cache = await caches.open(API_CACHE_NAME);
+      await cache.put('/api/favorites', new Response(JSON.stringify(data)));
       console.log('Background sync completed');
     }
   } catch (error) {
     console.error('Background sync failed:', error);
+    // Don't throw - just log the error
   }
+}
+
+// Helper function to get stored token (implement based on your storage method)
+async function getStoredToken() {
+  // This is a placeholder - implement based on how you store the token
+  // For example, you might use IndexedDB or the Cache API
+  return null;
 }
 
 // Push notifications
@@ -177,7 +231,7 @@ self.addEventListener('push', (event) => {
     body: event.data ? event.data.text() : 'New stock alert!',
     icon: '/logo192.png',
     badge: '/favicon.ico',
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200],
     data: {
       dateOfArrival: Date.now(),
       primaryKey: 1
@@ -185,76 +239,37 @@ self.addEventListener('push', (event) => {
     actions: [
       {
         action: 'explore',
-        title: '詳細を見る',
-        icon: '/favicon.ico'
+        title: 'View Details',
+        icon: '/logo192.png'
       },
       {
         action: 'close',
-        title: '閉じる',
-        icon: '/favicon.ico'
+        title: 'Close',
+        icon: '/logo192.png'
       }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification('株式分析ヘルパー', options)
+    self.registration.showNotification('Stock Analysis Helper', options)
   );
 });
 
-// Handle notification click
+// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  if (event.action === 'explore' || event.action === 'view') {
+  if (event.action === 'explore') {
     // Open the app
     event.waitUntil(
       clients.openWindow('/')
     );
-  } else if (event.action === 'close') {
-    // Just close the notification
-    event.notification.close();
-  } else {
-    // Default action
-    event.waitUntil(
-      clients.openWindow('/')
-    );
   }
 });
 
-// Handle messages from the main app
+// Handle message events
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-
-  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
-    self.registration.showNotification(event.data.title, event.data.options);
-  }
-
-  if (event.data && event.data.type === 'BACKGROUND_SYNC') {
-    // Trigger background sync
-    self.registration.sync.register(event.data.tag || 'background-sync');
-  }
 });
-
-// Clean up old caches periodically
-async function cleanupCaches() {
-  const now = Date.now();
-  
-  // Clean API cache
-  const apiCache = await caches.open(API_CACHE_NAME);
-  const apiRequests = await apiCache.keys();
-  
-  for (const request of apiRequests) {
-    const response = await apiCache.match(request);
-    if (response) {
-      const cacheTime = response.headers.get('sw-cache-time');
-      if (cacheTime && (now - parseInt(cacheTime)) > CACHE_EXPIRATION.api * 1000) {
-        await apiCache.delete(request);
-      }
-    }
-  }
-}
-
-// Run cleanup every hour
-setInterval(cleanupCaches, 3600000);

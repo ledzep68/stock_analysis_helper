@@ -35,7 +35,10 @@ import {
   ShowChart as ShowChartIcon,
   PictureAsPdf as ReportIcon,
   NotificationsActive as AlertIcon,
-  Help as HelpIcon
+  Help as HelpIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
+  AccountBalance as EcoIcon
 } from '@mui/icons-material';
 
 interface MobileLayoutProps {
@@ -43,13 +46,17 @@ interface MobileLayoutProps {
   currentPage?: string;
   onPageChange?: (page: string) => void;
   onLogout?: () => void;
+  darkMode?: boolean;
+  onThemeToggle?: () => void;
 }
 
 export const MobileLayout: React.FC<MobileLayoutProps> = ({ 
   children, 
   currentPage = 'home', 
   onPageChange,
-  onLogout
+  onLogout,
+  darkMode = false,
+  onThemeToggle
 }) => {
   const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -86,6 +93,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     { id: 'search', text: '企業検索', icon: <SearchIcon /> },
     { id: 'favorites', text: 'お気に入り', icon: <FavoriteIcon /> },
     { id: 'technical', text: 'テクニカル分析', icon: <ShowChartIcon /> },
+    { id: 'esg', text: 'ESG評価', icon: <EcoIcon /> },
     { id: 'reports', text: 'レポート', icon: <ReportIcon /> },
     { id: 'alerts', text: 'アラート', icon: <AlertIcon /> },
     { id: 'profile', text: 'プロフィール', icon: <PersonIcon /> },
@@ -97,9 +105,9 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     { value: 'home', label: 'ホーム', icon: <HomeIcon /> },
     { value: 'search', label: '検索', icon: <SearchIcon /> },
     { value: 'analysis', label: '分析', icon: <AssessmentIcon /> },
+    { value: 'esg', label: 'ESG', icon: <EcoIcon /> },
     { value: 'portfolio', label: 'ポートフォリオ', icon: <TrendingUpIcon /> },
-    { value: 'profile', label: 'プロフィール', icon: <PersonIcon /> },
-    { value: 'help', label: 'ヘルプ', icon: <HelpIcon /> }
+    { value: 'profile', label: 'プロフィール', icon: <PersonIcon /> }
   ];
 
   const drawerContent = (
@@ -147,6 +155,19 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
       </List>
 
       <Divider />
+
+      {/* Theme Toggle */}
+      {onThemeToggle && (
+        <ListItemButton onClick={() => {
+          onThemeToggle();
+          setDrawerOpen(false);
+        }}>
+          <ListItemIcon>
+            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+          </ListItemIcon>
+          <ListItemText primary={darkMode ? "ライトモード" : "ダークモード"} />
+        </ListItemButton>
+      )}
 
       {/* Logout Button */}
       {onLogout && (

@@ -29,9 +29,11 @@ import {
   ShowChart,
   Timeline,
   Assessment,
-  Speed
+  Speed,
+  BarChart
 } from '@mui/icons-material';
 import { api } from '../services/api';
+import { InteractiveChart } from './InteractiveChart';
 
 interface TechnicalIndicators {
   sma: { [key: string]: number };
@@ -90,11 +92,28 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
     try {
       setLoading(true);
       setError(null);
+      
+      console.log(`🔍 Fetching technical analysis for symbol: ${symbol}`);
       const response = await api.get(`/technical/${symbol}/indicators`);
+      
+      console.log('✅ Technical analysis response:', response.data);
       setData(response.data.data);
-    } catch (err) {
-      setError('テクニカル分析データの取得に失敗しました');
-      console.error('Technical analysis error:', err);
+    } catch (err: any) {
+      console.error('❌ Technical analysis error:', err);
+      
+      let errorMessage = 'テクニカル分析データの取得に失敗しました';
+      
+      if (err.response?.status === 401) {
+        errorMessage = '認証が必要です。再度ログインしてください。';
+      } else if (err.response?.status === 403) {
+        errorMessage = 'アクセス権限がありません。ログインし直してください。';
+      } else if (err.response?.status === 404) {
+        errorMessage = '指定された銘柄が見つかりません。';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -168,6 +187,7 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
         </Box>
 
         <Tabs value={tabValue} onChange={(_, value) => setTabValue(value)} sx={{ mb: 3 }}>
+          <Tab icon={<BarChart />} label="チャート" />
           <Tab icon={<ShowChart />} label="移動平均" />
           <Tab icon={<Timeline />} label="モメンタム" />
           <Tab icon={<Assessment />} label="ボラティリティ" />
@@ -175,6 +195,10 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
         </Tabs>
 
         {tabValue === 0 && (
+          <InteractiveChart symbol={symbol} />
+        )}
+
+        {tabValue === 1 && (
           <Grid2 container spacing={3}>
             <Grid2 size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 2 }}>
@@ -217,7 +241,7 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
           </Grid2>
         )}
 
-        {tabValue === 1 && (
+        {tabValue === 2 && (
           <Grid2 container spacing={3}>
             <Grid2 size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 2 }}>
@@ -297,7 +321,7 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
           </Grid2>
         )}
 
-        {tabValue === 2 && (
+        {tabValue === 3 && (
           <Grid2 container spacing={3}>
             <Grid2 size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 2 }}>
@@ -352,7 +376,7 @@ export const TechnicalAnalysis: React.FC<TechnicalAnalysisProps> = ({ symbol }) 
           </Grid2>
         )}
 
-        {tabValue === 3 && (
+        {tabValue === 4 && (
           <Box>
             <Typography variant="subtitle1" gutterBottom>
               分析シグナル

@@ -85,6 +85,31 @@ export class AuthService {
     }
   }
 
+  async verifySocketToken(token: string): Promise<{ id: number; email: string; username?: string } | null> {
+    try {
+      const decoded = jwt.verify(token, this.jwtSecret, {
+        issuer: 'stock-analysis-helper',
+        audience: 'stock-analysis-users'
+      }) as any;
+      
+      // ユーザー存在確認
+      const result = await db.query('SELECT id, email, username FROM users WHERE id = ? AND is_active = true', [decoded.userId]);
+      
+      if (result.rows && result.rows.length > 0) {
+        return {
+          id: result.rows[0].id,
+          email: result.rows[0].email,
+          username: result.rows[0].username
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Socket token verification failed:', error);
+      return null;
+    }
+  }
+
   async createUserSession(userId: string, token: string, ipAddress: string, userAgent: string): Promise<boolean> {
     try {
       // Hash the token for storage (additional security layer)
@@ -205,9 +230,23 @@ export class AuthService {
 
 export const authService = new AuthService();
 
+export const authenticateSocketToken = async (token: string) => {
+  return await authService.verifySocketToken(token);
+};
+
 // Middleware to authenticate JWT tokens
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
+    // 開発環境での認証バイパス（一時的）
+    if (process.env.NODE_ENV === 'development' && process.env.BYPASS_AUTH === 'true') {
+      req.user = {
+        id: 'dev-user-1',
+        email: 'dev@example.com'
+      };
+      next();
+      return;
+    }
+
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 

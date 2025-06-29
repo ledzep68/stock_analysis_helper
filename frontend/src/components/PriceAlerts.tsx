@@ -10,101 +10,128 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
   Select,
   MenuItem,
+  FormControl,
+  InputLabel,
+  Switch,
+  FormControlLabel,
   Chip,
   IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Alert,
+  Divider,
+  Grid,
+  Paper,
+  Fab,
+  Badge,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Switch,
-  FormControlLabel,
-  Alert,
-  CircularProgress,
   Tooltip,
-  Fab
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  Notifications as NotificationsIcon,
-  NotificationsOff as NotificationsOffIcon,
-  History as HistoryIcon,
+  Edit as EditIcon,
+  NotificationsActive,
+  NotificationsOff,
   TrendingUp,
   TrendingDown,
   ShowChart,
-  VolumeUp
+  VolumeUp,
+  History as HistoryIcon,
+  Notifications as NotificationsIcon,
+  NotificationsOff as NotificationsOffIcon
 } from '@mui/icons-material';
 import { api } from '../services/api';
 
 interface PriceAlert {
-  id: number;
+  id: string;
   symbol: string;
-  alert_type: 'price_above' | 'price_below' | 'percent_change' | 'volume_spike' | 'technical_signal';
-  target_value: number;
-  current_value: number;
-  is_active: boolean;
-  triggered_at: string | null;
-  created_at: string;
-  updated_at: string;
+  alertType: 'PRICE_TARGET' | 'PRICE_CHANGE' | 'VOLUME_SPIKE';
+  targetValue: number;
+  currentValue?: number;
+  condition: 'ABOVE' | 'BELOW' | 'CHANGE_PERCENT';
+  isActive: boolean;
+  lastTriggered?: string;
+  createdAt: string;
+  metadata?: {
+    companyName?: string;
+    notificationMethod?: string;
+  };
 }
 
-interface AlertHistory {
-  id: number;
-  alert_id: number;
-  triggered_value: number;
-  message: string;
-  created_at: string;
-  symbol: string;
-  alert_type: string;
+interface AlertStats {
+  total_alerts: number;
+  active_alerts: number;
+  triggered_alerts: number;
+  recent_triggers: any[];
 }
 
 interface PriceAlertsProps {
   presetSymbol?: string;
 }
 
-export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
+const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
-  const [history, setHistory] = useState<AlertHistory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<AlertStats | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<PriceAlert | null>(null);
+  const [formData, setFormData] = useState<{
+    symbol: string;
+    alertType: 'PRICE_TARGET' | 'PRICE_CHANGE' | 'VOLUME_SPIKE';
+    targetValue: string;
+    condition: 'ABOVE' | 'BELOW' | 'CHANGE_PERCENT';
+    companyName: string;
+    notificationMethod: string;
+  }>({
+    symbol: presetSymbol || '',
+    alertType: 'PRICE_TARGET',
+    targetValue: '',
+    condition: 'ABOVE',
+    companyName: '',
+    notificationMethod: 'WEB_PUSH'
+  });
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<PriceAlert | null>(null);
-  const [formData, setFormData] = useState({
-    symbol: '',
-    alertType: 'price_above',
-    targetValue: ''
-  });
 
   useEffect(() => {
     fetchAlerts();
-    // If preset symbol is provided, open create dialog with preset
-    if (presetSymbol) {
-      setFormData(prev => ({ ...prev, symbol: presetSymbol }));
-      setCreateDialogOpen(true);
-    }
-  }, [presetSymbol]);
+    fetchStats();
+  }, []);
 
   const fetchAlerts = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const response = await api.get('/alerts');
-      setAlerts(response.data.data);
-    } catch (err) {
+      const response = await api.get('/price-alerts');
+      setAlerts(response.data.alerts || []);
+    } catch (err: any) {
       setError('アラートの取得に失敗しました');
       console.error('Fetch alerts error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/price-alerts/stats/summary');
+      setStats(response.data.stats);
+    } catch (err) {
+      console.error('Fetch stats error:', err);
     }
   };
 
@@ -128,7 +155,14 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
       if (response.data.success) {
         await fetchAlerts();
         setCreateDialogOpen(false);
-        setFormData({ symbol: '', alertType: 'price_above', targetValue: '' });
+        setFormData({ 
+          symbol: presetSymbol || '', 
+          alertType: 'PRICE_TARGET', 
+          targetValue: '', 
+          condition: 'ABOVE',
+          companyName: '',
+          notificationMethod: 'WEB_PUSH'
+        });
       }
     } catch (err) {
       setError('アラートの作成に失敗しました');
@@ -143,7 +177,7 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
       const response = await api.put(`/alerts/${selectedAlert.id}`, {
         target_value: parseFloat(formData.targetValue),
         alert_type: formData.alertType,
-        is_active: selectedAlert.is_active
+        is_active: selectedAlert.isActive
       });
 
       if (response.data.success) {
@@ -157,7 +191,7 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
     }
   };
 
-  const handleDeleteAlert = async (alertId: number) => {
+  const handleDeleteAlert = async (alertId: string) => {
     try {
       const response = await api.delete(`/alerts/${alertId}`);
       
@@ -173,7 +207,7 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
   const handleToggleAlert = async (alert: PriceAlert) => {
     try {
       const response = await api.put(`/alerts/${alert.id}`, {
-        is_active: !alert.is_active
+        is_active: !alert.isActive
       });
 
       if (response.data.success) {
@@ -189,8 +223,11 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
     setSelectedAlert(alert);
     setFormData({
       symbol: alert.symbol,
-      alertType: alert.alert_type,
-      targetValue: alert.target_value.toString()
+      alertType: alert.alertType,
+      targetValue: alert.targetValue.toString(),
+      condition: alert.condition,
+      companyName: alert.metadata?.companyName || '',
+      notificationMethod: alert.metadata?.notificationMethod || 'WEB_PUSH'
     });
     setEditDialogOpen(true);
   };
@@ -202,29 +239,25 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
 
   const getAlertTypeLabel = (type: string) => {
     switch (type) {
-      case 'price_above': return '価格上昇';
-      case 'price_below': return '価格下落';
-      case 'percent_change': return '変動率';
-      case 'volume_spike': return '出来高急増';
-      case 'technical_signal': return 'テクニカル';
+      case 'PRICE_TARGET': return '価格目標';
+      case 'PRICE_CHANGE': return '価格変動';
+      case 'VOLUME_SPIKE': return '出来高急増';
       default: return type;
     }
   };
 
   const getAlertTypeIcon = (type: string) => {
     switch (type) {
-      case 'price_above': return <TrendingUp />;
-      case 'price_below': return <TrendingDown />;
-      case 'percent_change': return <ShowChart />;
-      case 'volume_spike': return <VolumeUp />;
-      case 'technical_signal': return <ShowChart />;
+      case 'PRICE_TARGET': return <TrendingUp />;
+      case 'PRICE_CHANGE': return <ShowChart />;
+      case 'VOLUME_SPIKE': return <VolumeUp />;
       default: return <NotificationsIcon />;
     }
   };
 
   const getAlertStatusColor = (alert: PriceAlert) => {
-    if (alert.triggered_at) return 'success';
-    if (alert.is_active) return 'primary';
+    if (alert.lastTriggered) return 'success';
+    if (alert.isActive) return 'primary';
     return 'default';
   };
 
@@ -285,7 +318,7 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
                 <TableRow key={alert.id}>
                   <TableCell>
                     <Box display="flex" alignItems="center">
-                      {getAlertTypeIcon(alert.alert_type)}
+                      {getAlertTypeIcon(alert.alertType)}
                       <Typography variant="body2" sx={{ ml: 1 }}>
                         {alert.symbol}
                       </Typography>
@@ -293,49 +326,49 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={getAlertTypeLabel(alert.alert_type)}
+                      label={getAlertTypeLabel(alert.alertType)}
                       size="small"
                       variant="outlined"
                     />
                   </TableCell>
                   <TableCell>
-                    {alert.alert_type.includes('percent') 
-                      ? `${alert.target_value}%`
-                      : `¥${alert.target_value.toFixed(2)}`
+                    {alert.alertType.includes('CHANGE') 
+                      ? `${alert.targetValue}%`
+                      : `¥${alert.targetValue.toFixed(2)}`
                     }
                   </TableCell>
                   <TableCell>
-                    {alert.alert_type.includes('percent')
+                    {alert.alertType.includes('CHANGE')
                       ? '-'
-                      : `¥${alert.current_value.toFixed(2)}`
+                      : alert.currentValue ? `¥${alert.currentValue.toFixed(2)}` : '-'
                     }
                   </TableCell>
                   <TableCell>
                     <Box display="flex" alignItems="center">
                       <Chip
-                        icon={alert.is_active ? <NotificationsIcon /> : <NotificationsOffIcon />}
-                        label={alert.triggered_at ? '発動済み' : alert.is_active ? '有効' : '無効'}
+                        icon={alert.isActive ? <NotificationsIcon /> : <NotificationsOffIcon />}
+                        label={alert.lastTriggered ? '発動済み' : alert.isActive ? '有効' : '無効'}
                         color={getAlertStatusColor(alert) as any}
                         size="small"
                       />
                       <Switch
-                        checked={alert.is_active}
+                        checked={alert.isActive}
                         onChange={() => handleToggleAlert(alert)}
-                        disabled={!!alert.triggered_at}
+                        disabled={!!alert.lastTriggered}
                         size="small"
                         sx={{ ml: 1 }}
                       />
                     </Box>
                   </TableCell>
                   <TableCell>
-                    {new Date(alert.created_at).toLocaleDateString('ja-JP')}
+                    {new Date(alert.createdAt).toLocaleDateString('ja-JP')}
                   </TableCell>
                   <TableCell>
                     <Tooltip title="編集">
                       <IconButton
                         size="small"
                         onClick={() => openEditDialog(alert)}
-                        disabled={!!alert.triggered_at}
+                        disabled={!!alert.lastTriggered}
                       >
                         <EditIcon />
                       </IconButton>
@@ -382,18 +415,16 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
                 <InputLabel>アラート種類</InputLabel>
                 <Select
                   value={formData.alertType}
-                  onChange={(e) => setFormData({ ...formData, alertType: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, alertType: e.target.value as 'PRICE_TARGET' | 'PRICE_CHANGE' | 'VOLUME_SPIKE' })}
                 >
-                  <MenuItem value="price_above">価格上昇アラート</MenuItem>
-                  <MenuItem value="price_below">価格下落アラート</MenuItem>
-                  <MenuItem value="percent_change">変動率アラート</MenuItem>
-                  <MenuItem value="volume_spike">出来高急増アラート</MenuItem>
-                  <MenuItem value="technical_signal">テクニカルシグナル</MenuItem>
+                  <MenuItem value="PRICE_TARGET">価格目標アラート</MenuItem>
+                  <MenuItem value="PRICE_CHANGE">価格変動アラート</MenuItem>
+                  <MenuItem value="VOLUME_SPIKE">出来高急増アラート</MenuItem>
                 </Select>
               </FormControl>
               <TextField
                 fullWidth
-                label={formData.alertType.includes('percent') ? '変動率 (%)' : 'ターゲット価格 (¥)'}
+                label={formData.alertType.includes('CHANGE') ? '変動率 (%)' : 'ターゲット価格 (¥)'}
                 value={formData.targetValue}
                 onChange={(e) => setFormData({ ...formData, targetValue: e.target.value })}
                 type="number"
@@ -423,18 +454,16 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
                 <InputLabel>アラート種類</InputLabel>
                 <Select
                   value={formData.alertType}
-                  onChange={(e) => setFormData({ ...formData, alertType: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, alertType: e.target.value as 'PRICE_TARGET' | 'PRICE_CHANGE' | 'VOLUME_SPIKE' })}
                 >
-                  <MenuItem value="price_above">価格上昇アラート</MenuItem>
-                  <MenuItem value="price_below">価格下落アラート</MenuItem>
-                  <MenuItem value="percent_change">変動率アラート</MenuItem>
-                  <MenuItem value="volume_spike">出来高急増アラート</MenuItem>
-                  <MenuItem value="technical_signal">テクニカルシグナル</MenuItem>
+                  <MenuItem value="PRICE_TARGET">価格目標アラート</MenuItem>
+                  <MenuItem value="PRICE_CHANGE">価格変動アラート</MenuItem>
+                  <MenuItem value="VOLUME_SPIKE">出来高急増アラート</MenuItem>
                 </Select>
               </FormControl>
               <TextField
                 fullWidth
-                label={formData.alertType.includes('percent') ? '変動率 (%)' : 'ターゲット価格 (¥)'}
+                label={formData.alertType.includes('CHANGE') ? '変動率 (%)' : 'ターゲット価格 (¥)'}
                 value={formData.targetValue}
                 onChange={(e) => setFormData({ ...formData, targetValue: e.target.value })}
                 type="number"
@@ -469,15 +498,15 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
                       <TableCell>{item.symbol}</TableCell>
                       <TableCell>
                         <Chip
-                          label={getAlertTypeLabel(item.alert_type)}
+                          label={getAlertTypeLabel(item.alertType || item.alert_type)}
                           size="small"
                           variant="outlined"
                         />
                       </TableCell>
-                      <TableCell>¥{item.triggered_value.toFixed(2)}</TableCell>
-                      <TableCell>{item.message}</TableCell>
+                      <TableCell>¥{(item.triggerPrice || item.triggered_value || 0).toFixed(2)}</TableCell>
+                      <TableCell>{item.message || 'アラートが発動しました'}</TableCell>
                       <TableCell>
-                        {new Date(item.created_at).toLocaleString('ja-JP')}
+                        {new Date(item.createdAt || item.created_at).toLocaleString('ja-JP')}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -502,3 +531,5 @@ export const PriceAlerts: React.FC<PriceAlertsProps> = ({ presetSymbol }) => {
     </Card>
   );
 };
+
+export default PriceAlerts;

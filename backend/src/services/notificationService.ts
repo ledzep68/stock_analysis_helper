@@ -280,3 +280,6 @@ export class NotificationService {
     }
   }
 }
+
+// シングルトンインスタンスをエクスポート
+export const notificationService = new NotificationService();
